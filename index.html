@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Engage Fall - Live Social Stream</title>
+
+    <!-- Viva Engage SDK -->
+    <script src="https://c64.assets-yammer.com/assets/platform_js_sdk.js"></script>
+
     <style>
         * {
             margin: 0;
@@ -17,6 +21,78 @@
             min-height: 100vh;
             overflow: hidden;
             position: relative;
+        }
+
+        /* Login Screen */
+        .login-screen {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-screen.active {
+            display: flex;
+        }
+
+        .login-box {
+            background: white;
+            padding: 60px;
+            border-radius: 30px;
+            text-align: center;
+            box-shadow: 0 20px 80px rgba(0,0,0,0.3);
+            max-width: 500px;
+        }
+
+        .login-logo {
+            font-size: 64px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #1e3c72 0%, #7e22ce 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 20px;
+        }
+
+        .login-subtitle {
+            font-size: 20px;
+            color: #6b7280;
+            margin-bottom: 40px;
+        }
+
+        .sign-in-btn {
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+            color: white;
+            border: none;
+            padding: 20px 50px;
+            font-size: 20px;
+            font-weight: 700;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .sign-in-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(139, 92, 246, 0.4);
+        }
+
+        .demo-link {
+            margin-top: 30px;
+            color: #6b7280;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .demo-link:hover {
+            color: #374151;
         }
 
         /* Animated background particles */
@@ -338,6 +414,8 @@
             border-radius: 30px;
             max-width: 600px;
             width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
             box-shadow: 0 20px 80px rgba(0,0,0,0.5);
             position: relative;
         }
@@ -435,15 +513,45 @@
             margin-top: 8px;
         }
 
-        /* Celebration effects */
-        .celebration {
+        .user-info {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 999;
+            top: 30px;
+            left: 30px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 50px;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 100;
+        }
+
+        .sign-out-link {
+            color: #fbbf24;
+            text-decoration: none;
+            margin-left: 15px;
+            cursor: pointer;
+        }
+
+        .sign-out-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Loading spinner */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
         /* Responsive */
@@ -478,12 +586,37 @@
                 flex-wrap: wrap;
                 gap: 15px;
             }
+
+            .user-info {
+                position: static;
+                margin-bottom: 20px;
+                text-align: center;
+            }
         }
     </style>
 </head>
 <body>
+    <!-- Login Screen -->
+    <div class="login-screen active" id="loginScreen">
+        <div class="login-box">
+            <div class="login-logo">ENGAGE FALL</div>
+            <p class="login-subtitle">Sign in with your Microsoft account to get started</p>
+            <button class="sign-in-btn" id="signInBtn" onclick="signIn()">
+                <span id="signInText">🔐 Sign In with Microsoft</span>
+            </button>
+            <br>
+            <a href="#" class="demo-link" onclick="useDemoMode()">or continue with demo mode</a>
+        </div>
+    </div>
+
+    <!-- Main App -->
     <div class="particles" id="particles"></div>
-    <div class="celebration" id="celebration"></div>
+
+    <!-- User Info -->
+    <div class="user-info" id="userInfo" style="display:none;">
+        <span id="userName"></span>
+        <a href="#" class="sign-out-link" onclick="signOut()">Sign Out</a>
+    </div>
 
     <div class="container">
         <header>
@@ -521,28 +654,18 @@
             <div class="form-group">
                 <label>Data Source</label>
                 <select id="sourceType" onchange="updateSourceOptions()">
-                    <option value="demo">Demo Mode (Sample Data)</option>
                     <option value="network">Entire Network Feed</option>
                     <option value="community">Community Feed</option>
-                    <option value="event">Event/Campaign Feed</option>
                     <option value="hashtag">Hashtag Feed</option>
                 </select>
             </div>
 
-            <div class="form-group" id="apiKeyGroup">
-                <label>Viva Engage API Token</label>
-                <input type="password" id="apiToken" placeholder="Enter your API token">
-                <div class="hint">Get your token from Viva Engage Developer Settings</div>
-            </div>
-
-            <div class="form-group" id="communityGroup" style="display:none;">
-                <label>Community ID</label>
-                <input type="text" id="communityId" placeholder="e.g., 12345678">
-            </div>
-
-            <div class="form-group" id="eventGroup" style="display:none;">
-                <label>Event/Campaign Hashtag</label>
-                <input type="text" id="eventHashtag" placeholder="e.g., #SalesKickoff2026">
+            <div class="form-group" id="communityGroup">
+                <label>Select Community</label>
+                <select id="communitySelect">
+                    <option value="">Loading communities...</option>
+                </select>
+                <div class="hint">Choose a community from your network</div>
             </div>
 
             <div class="form-group" id="hashtagGroup" style="display:none;">
@@ -551,7 +674,7 @@
             </div>
 
             <div class="form-group">
-                <label>Update Interval (seconds)</label>
+                <label>Update Interval</label>
                 <select id="updateInterval">
                     <option value="3">3 seconds (Fast)</option>
                     <option value="5" selected>5 seconds (Normal)</option>
@@ -561,7 +684,7 @@
             </div>
 
             <div class="button-group">
-                <button class="btn-primary" onclick="saveSettings()">💾 Save & Connect</button>
+                <button class="btn-primary" onclick="saveSettings()">💾 Save & Start</button>
                 <button class="btn-secondary" onclick="closeSettings()">Cancel</button>
             </div>
         </div>
@@ -570,13 +693,16 @@
     <script>
         // Configuration
         let config = {
-            sourceType: 'demo',
-            apiToken: '',
+            sourceType: 'network',
             communityId: '',
-            eventHashtag: '',
             hashtagValue: '',
-            updateInterval: 5000
+            updateInterval: 5000,
+            isDemoMode: false
         };
+
+        let authToken = null;
+        let currentUser = null;
+        let userCommunities = [];
 
         // Sample data for demo mode
         const sampleNames = [
@@ -613,8 +739,90 @@
         let isPaused = false;
         let messageCount = 0;
         let engagementCount = 0;
-        let updateInterval;
+        let updateIntervalId;
         const maxMessages = 40;
+
+        // Initialize Viva Engage SDK
+        yam.connect.embedFeed({
+            container: '#hidden-feed',
+            network: 'all',
+            feedType: 'company'
+        });
+
+        // Sign In
+        async function signIn() {
+            const btn = document.getElementById('signInBtn');
+            btn.innerHTML = '<span class="loading"></span> Signing in...';
+            btn.disabled = true;
+
+            yam.connect.loginButton('#signInBtn', function (resp) {
+                if (resp.authResponse) {
+                    authToken = resp.authResponse.access_token.token;
+                    handleSuccessfulLogin(resp);
+                } else {
+                    btn.innerHTML = '🔐 Sign In with Microsoft';
+                    btn.disabled = false;
+                }
+            });
+        }
+
+        async function handleSuccessfulLogin(response) {
+            try {
+                // Get current user info
+                const userResp = await fetch('https://www.yammer.com/api/v1/users/current.json', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                currentUser = await userResp.json();
+
+                // Get user's communities
+                const commResp = await fetch('https://www.yammer.com/api/v1/groups.json', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const commData = await commResp.json();
+                userCommunities = commData;
+
+                // Update UI
+                document.getElementById('loginScreen').classList.remove('active');
+                document.getElementById('userInfo').style.display = 'block';
+                document.getElementById('userName').textContent = currentUser.full_name;
+
+                // Populate communities dropdown
+                populateCommunities();
+
+                // Show settings
+                setTimeout(() => openSettings(), 500);
+
+            } catch (error) {
+                console.error('Error during login:', error);
+                alert('Error loading your communities. Please try again.');
+                btn.innerHTML = '🔐 Sign In with Microsoft';
+                btn.disabled = false;
+            }
+        }
+
+        function populateCommunities() {
+            const select = document.getElementById('communitySelect');
+            select.innerHTML = '<option value="">All Communities</option>';
+
+            userCommunities.forEach(comm => {
+                const option = document.createElement('option');
+                option.value = comm.id;
+                option.textContent = comm.full_name;
+                select.appendChild(option);
+            });
+        }
+
+        function signOut() {
+            yam.logout(function() {
+                location.reload();
+            });
+        }
+
+        function useDemoMode() {
+            config.isDemoMode = true;
+            document.getElementById('loginScreen').classList.remove('active');
+            startFeed();
+        }
 
         // Initialize particles
         function createParticles() {
@@ -651,11 +859,10 @@
             if (isPaused) return;
 
             // Demo mode data generation
-            if (!data) {
+            if (!data || config.isDemoMode) {
                 const name = sampleNames[Math.floor(Math.random() * sampleNames.length)];
                 let message = sampleMessages[Math.floor(Math.random() * sampleMessages.length)];
 
-                // 30% chance to add a hashtag
                 if (Math.random() < 0.3 && !message.includes('#')) {
                     const hashtag = sampleHashtags[Math.floor(Math.random() * sampleHashtags.length)];
                     message += ' ' + hashtag;
@@ -667,7 +874,7 @@
                     timestamp: new Date(),
                     likes: Math.floor(Math.random() * 50) + 1,
                     comments: Math.floor(Math.random() * 15),
-                    isFeatured: Math.random() < 0.15 // 15% chance of featured
+                    isFeatured: Math.random() < 0.15
                 };
             }
 
@@ -705,11 +912,6 @@
 
             updateStats();
 
-            // Celebration for featured posts
-            if (data.isFeatured && Math.random() < 0.5) {
-                triggerCelebration();
-            }
-
             // Remove old messages
             while (feed.children.length > maxMessages) {
                 feed.removeChild(feed.lastChild);
@@ -720,15 +922,6 @@
         function updateStats() {
             document.getElementById('messageCount').textContent = messageCount;
             document.getElementById('engagementCount').textContent = engagementCount;
-        }
-
-        function triggerCelebration() {
-            // Add sparkle effect (simplified)
-            const celebration = document.getElementById('celebration');
-            celebration.style.background = 'radial-gradient(circle at center, rgba(251,191,36,0.1) 0%, transparent 50%)';
-            setTimeout(() => {
-                celebration.style.background = 'none';
-            }, 1000);
         }
 
         function togglePause() {
@@ -755,59 +948,46 @@
         function updateSourceOptions() {
             const sourceType = document.getElementById('sourceType').value;
 
-            document.getElementById('apiKeyGroup').style.display = sourceType === 'demo' ? 'none' : 'block';
-            document.getElementById('communityGroup').style.display = sourceType === 'community' ? 'block' : 'none';
-            document.getElementById('eventGroup').style.display = sourceType === 'event' ? 'block' : 'none';
-            document.getElementById('hashtagGroup').style.display = sourceType === 'hashtag' ? 'block' : 'none';
+            document.getElementById('communityGroup').style.display =
+                (sourceType === 'community') ? 'block' : 'none';
+            document.getElementById('hashtagGroup').style.display =
+                (sourceType === 'hashtag') ? 'block' : 'none';
         }
 
         function saveSettings() {
             config.sourceType = document.getElementById('sourceType').value;
-            config.apiToken = document.getElementById('apiToken').value;
-            config.communityId = document.getElementById('communityId').value;
-            config.eventHashtag = document.getElementById('eventHashtag').value;
+            config.communityId = document.getElementById('communitySelect').value;
             config.hashtagValue = document.getElementById('hashtagValue').value;
             config.updateInterval = parseInt(document.getElementById('updateInterval').value) * 1000;
 
-            // Restart with new settings
-            if (updateInterval) clearInterval(updateInterval);
-
-            if (config.sourceType !== 'demo' && !config.apiToken) {
-                alert('Please enter your Viva Engage API token to use live data.');
-                return;
-            }
-
             closeSettings();
             clearFeed();
+            if (updateIntervalId) clearInterval(updateIntervalId);
             startFeed();
         }
 
         async function fetchVivaEngageData() {
-            if (config.sourceType === 'demo') {
+            if (config.isDemoMode || !authToken) {
                 createMessage();
                 return;
             }
 
-            // Real Viva Engage API integration
             try {
                 let endpoint = 'https://www.yammer.com/api/v1/messages.json';
 
-                if (config.sourceType === 'community') {
+                if (config.sourceType === 'community' && config.communityId) {
                     endpoint = `https://www.yammer.com/api/v1/messages/in_group/${config.communityId}.json`;
-                } else if (config.sourceType === 'hashtag' || config.sourceType === 'event') {
-                    const tag = config.sourceType === 'event' ? config.eventHashtag : config.hashtagValue;
+                } else if (config.sourceType === 'hashtag' && config.hashtagValue) {
+                    const tag = config.hashtagValue.replace('#', '');
                     endpoint = `https://www.yammer.com/api/v1/messages/about_topic.json?topic=${encodeURIComponent(tag)}`;
                 }
 
                 const response = await fetch(endpoint, {
-                    headers: {
-                        'Authorization': `Bearer ${config.apiToken}`
-                    }
+                    headers: { 'Authorization': `Bearer ${authToken}` }
                 });
 
                 if (!response.ok) {
                     console.error('API Error:', response.status);
-                    // Fallback to demo
                     createMessage();
                     return;
                 }
@@ -822,30 +1002,29 @@
                         timestamp: new Date(msg.created_at),
                         likes: msg.liked_by?.count || 0,
                         comments: msg.stats?.replies || 0,
-                        isFeatured: msg.stats?.views > 100
+                        isFeatured: (msg.liked_by?.count || 0) > 20
                     });
                 } else {
-                    createMessage(); // Fallback to demo
+                    createMessage();
                 }
             } catch (error) {
                 console.error('Fetch error:', error);
-                createMessage(); // Fallback to demo
+                createMessage();
             }
         }
 
         function startFeed() {
-            // Initial burst of messages
+            // Initial burst
             for (let i = 0; i < 6; i++) {
                 setTimeout(() => createMessage(), i * 800);
             }
 
-            // Continue adding messages
-            updateInterval = setInterval(fetchVivaEngageData, config.updateInterval);
+            // Continue
+            updateIntervalId = setInterval(fetchVivaEngageData, config.updateInterval);
         }
 
         // Initialize
         createParticles();
-        startFeed();
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
