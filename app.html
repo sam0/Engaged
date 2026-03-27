@@ -873,28 +873,38 @@
             }
 
             try {
-                let endpoint;
-                let isThreadsEndpoint = false;
+                let groupId;
 
                 if (config.sourceType === 'community' && config.communityId) {
                     // Decode the community ID to get the actual group ID
                     try {
                         const decoded = JSON.parse(atob(config.communityId));
-                        const groupId = decoded.id;
-
-                        // Use Groups API to fetch conversations/threads with posts expanded
-                        endpoint = `https://graph.microsoft.com/v1.0/groups/${groupId}/threads?$top=20&$expand=posts($select=from,body,receivedDateTime)`;
-                        isThreadsEndpoint = true;
+                        groupId = decoded.id;
                     } catch (e) {
                         console.error('Failed to decode community ID:', e);
-                        endpoint = `https://graph.microsoft.com/v1.0/groups/${config.communityId}/threads?$top=20`;
-                        isThreadsEndpoint = true;
+                        groupId = config.communityId;
                     }
                 } else {
-                    // Fetch from all communities
-                    endpoint = 'https://graph.microsoft.com/v1.0/employeeExperience/communities';
+                    // "All Communities" mode - pick a random community first
+                    if (communities.length === 0) {
+                        console.log('No communities loaded yet');
+                        return;
+                    }
+                    const randomCommunity = communities[Math.floor(Math.random() * communities.length)];
+                    console.log('Selected random community:', randomCommunity.displayName);
+
+                    // Decode the community ID to get the group ID
+                    try {
+                        const decoded = JSON.parse(atob(randomCommunity.id));
+                        groupId = decoded.id;
+                    } catch (e) {
+                        console.error('Failed to decode community ID:', e);
+                        groupId = randomCommunity.id;
+                    }
                 }
 
+                // Fetch threads from the group with posts expanded
+                const endpoint = `https://graph.microsoft.com/v1.0/groups/${groupId}/threads?$top=20&$expand=posts($select=from,body,receivedDateTime)`;
                 console.log('Fetching from:', endpoint);
 
                 const response = await fetch(endpoint, {
@@ -905,31 +915,43 @@
                     const data = await response.json();
                     console.log('API response:', data);
 
-                    // Process conversations/posts/threads
+                    // Process threads
                     if (data.value && data.value.length > 0) {
-                        console.log('Found', data.value.length, 'items');
+                        console.log('Found', data.value.length, 'threads');
                         const randomThread = data.value[Math.floor(Math.random() * Math.min(data.value.length, 10))];
 
                         console.log('Selected thread:', randomThread);
 
-                        // Get author from first post in thread
+                        // Get author from first post in thread - try multiple paths
                         let authorName = 'Community Member';
                         if (randomThread.posts && randomThread.posts.length > 0) {
                             const firstPost = randomThread.posts[0];
+                            console.log('First post from field:', firstPost.from);
                             authorName = firstPost.from?.emailAddress?.name ||
+                                        firstPost.from?.user?.displayName ||
+                                        firstPost.from?.displayName ||
                                         firstPost.from?.name ||
                                         firstPost.sender?.emailAddress?.name ||
                                         'Community Member';
                         }
 
-                        // Extract post data - handle both threads and conversations formats
+                        // Strip HTML from message body if present
+                        let messageText = randomThread.topic || 'Community post';
+                        if (randomThread.posts && randomThread.posts[0]?.body?.content) {
+                            // Use body content if topic is generic or missing
+                            const bodyContent = randomThread.posts[0].body.content;
+                            // Strip HTML tags for plain text display
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = bodyContent;
+                            const plainText = tempDiv.textContent || tempDiv.innerText || '';
+                            if (plainText.trim() && plainText.length > messageText.length) {
+                                messageText = plainText.trim().substring(0, 280); // Truncate long posts
+                            }
+                        }
+
                         const postData = {
                             author: authorName,
-                            message: randomThread.topic ||
-                                    randomThread.body?.content ||
-                                    randomThread.preview ||
-                                    randomThread.displayName ||
-                                    'Community post',
+                            message: messageText,
                             timestamp: new Date(randomThread.lastDeliveredDateTime ||
                                                randomThread.createdDateTime ||
                                                randomThread.lastModifiedDateTime ||
@@ -939,18 +961,16 @@
                             isFeatured: (randomThread.hasAttachments || randomThread.isLocked || (randomThread.posts?.length || 0) > 5)
                         };
 
+                        console.log('Creating message with data:', postData);
                         createMessage(postData);
                     } else {
                         console.log('No threads found in response');
-                        // Don't create demo messages when authenticated
                     }
                 } else {
                     console.error('Graph API error:', response.status, await response.text());
-                    // Don't show demo content on error when authenticated
                 }
             } catch (error) {
                 console.error('Fetch error:', error);
-                // Don't show demo content on error when authenticated
             }
         }
 
